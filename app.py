@@ -4,16 +4,37 @@ import numpy as np
 
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(
-    page_title="Exoplanet Analytics Dashboard",
-    layout="wide",
+    page_title="Exoplanet Analytics",
+    page_icon="🪐",
+    layout="wide"
 )
+
+# ---------------- LIGHT STYLE ----------------
+st.markdown("""
+<style>
+.main {
+    background-color: #f7f9fc;
+}
+.block-container {
+    padding-top: 2rem;
+}
+h1, h2, h3 {
+    color: #1f2c56;
+}
+[data-testid="metric-container"] {
+    background: white;
+    border-radius: 12px;
+    padding: 15px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+</style>
+""", unsafe_allow_html=True)
 
 # ---------------- LOAD DATA ----------------
 @st.cache_data
 def load_data():
     df = pd.read_csv("exoplanets.csv")
 
-    # -------- rename for usability --------
     df = df.rename(columns={
         "pl_name": "planet",
         "hostname": "star",
@@ -33,7 +54,6 @@ def load_data():
         "sy_dist": "distance_pc",
     })
 
-    # -------- numeric safety --------
     num_cols = [
         "orbital_period", "semi_major_axis", "radius_earth", "mass_earth",
         "eccentricity", "insolation", "eq_temp", "star_temp",
@@ -43,7 +63,7 @@ def load_data():
     for c in num_cols:
         df[c] = pd.to_numeric(df[c], errors="coerce")
 
-    # -------- useful categories --------
+    # size buckets
     def size_bucket(r):
         if pd.isna(r):
             return "Unknown"
@@ -58,6 +78,7 @@ def load_data():
 
     df["size_type"] = df["radius_earth"].apply(size_bucket)
 
+    # temp buckets
     def temp_bucket(t):
         if pd.isna(t):
             return "Unknown"
@@ -76,9 +97,8 @@ def load_data():
 df = load_data()
 
 # ---------------- SIDEBAR ----------------
-st.sidebar.title("Filters")
+st.sidebar.header("🧭 Filters")
 
-# year range
 min_year = int(df["year"].min())
 max_year = int(df["year"].max())
 
@@ -88,60 +108,51 @@ year_range = st.sidebar.slider(
     (min_year, max_year)
 )
 
-# method
 methods = st.sidebar.multiselect(
-    "Discovery Method",
-    options=sorted(df["method"].dropna().unique()),
-    default=sorted(df["method"].dropna().unique())
+    "Method",
+    sorted(df["method"].dropna().unique()),
+    sorted(df["method"].dropna().unique())
 )
 
-# size
 sizes = st.sidebar.multiselect(
     "Planet Size",
-    options=sorted(df["size_type"].unique()),
-    default=sorted(df["size_type"].unique())
+    sorted(df["size_type"].unique()),
+    sorted(df["size_type"].unique())
 )
 
-# temperature
 temps = st.sidebar.multiselect(
-    "Temperature Class",
-    options=sorted(df["temp_type"].unique()),
-    default=sorted(df["temp_type"].unique())
+    "Temperature",
+    sorted(df["temp_type"].unique()),
+    sorted(df["temp_type"].unique())
 )
 
-# distance
-max_dist = float(np.nanpercentile(df["distance_pc"], 95))
-dist_range = st.sidebar.slider(
-    "Distance (parsec)",
-    0.0, float(df["distance_pc"].max()),
-    (0.0, max_dist)
-)
-
-# ---------------- APPLY FILTERS ----------------
+# ---------------- FILTER ----------------
 filtered = df[
     (df["year"].between(year_range[0], year_range[1])) &
     (df["method"].isin(methods)) &
     (df["size_type"].isin(sizes)) &
-    (df["temp_type"].isin(temps)) &
-    (df["distance_pc"].between(dist_range[0], dist_range[1]))
+    (df["temp_type"].isin(temps))
 ]
 
-# ---------------- HEADER ----------------
-st.title("Exoplanet Discovery Dashboard")
+# ---------------- TITLE ----------------
+st.title("🪐 Exoplanet Discovery Dashboard")
+st.caption("Interactive exploration of planetary discoveries")
 
-# ---------------- KPI ROW ----------------
+# ---------------- KPI ----------------
 c1, c2, c3, c4 = st.columns(4)
 
-c1.metric("Planets", len(filtered))
-c2.metric("Stars", filtered["star"].nunique())
-c3.metric("Methods", filtered["method"].nunique())
-c4.metric("Avg Distance (pc)", round(filtered["distance_pc"].mean(), 1))
+c1.metric("🪐 Total Planets", len(filtered))
+c2.metric("⭐ Host Stars", filtered["star"].nunique())
+c3.metric("🔭 Methods", filtered["method"].nunique())
+c4.metric("📏 Avg Distance (pc)", round(filtered["distance_pc"].mean(), 1))
+
+st.divider()
 
 # ---------------- CHARTS ----------------
 col1, col2 = st.columns(2)
 
 with col1:
-    st.subheader("Discoveries by Year")
+    st.subheader("📈 Discoveries Over Time")
     year_chart = (
         filtered.groupby("year")
         .size()
@@ -151,7 +162,7 @@ with col1:
     st.line_chart(year_chart.set_index("year"))
 
 with col2:
-    st.subheader("Discovery Methods")
+    st.subheader("🧪 Discovery Methods")
     method_chart = (
         filtered["method"]
         .value_counts()
@@ -160,11 +171,13 @@ with col2:
     method_chart.columns = ["method", "count"]
     st.bar_chart(method_chart.set_index("method"))
 
+st.divider()
+
 # ---------------- SIZE + TEMP ----------------
 col3, col4 = st.columns(2)
 
 with col3:
-    st.subheader("Planet Size Types")
+    st.subheader("🌍 Planet Size Distribution")
     size_chart = (
         filtered["size_type"]
         .value_counts()
@@ -174,7 +187,7 @@ with col3:
     st.bar_chart(size_chart.set_index("size"))
 
 with col4:
-    st.subheader("Temperature Classes")
+    st.subheader("🌡 Temperature Classes")
     temp_chart = (
         filtered["temp_type"]
         .value_counts()
@@ -183,17 +196,18 @@ with col4:
     temp_chart.columns = ["temp", "count"]
     st.bar_chart(temp_chart.set_index("temp"))
 
+st.divider()
+
 # ---------------- RELATIONSHIP ----------------
-st.subheader("Mass vs Radius")
+st.subheader("⚖ Mass vs Radius")
 
 scatter_df = filtered[["mass_earth", "radius_earth"]].dropna()
 
 st.scatter_chart(
     scatter_df,
-    x="mass_earth",
-    y="radius_earth"
+    x="mass_earth implying y="radius_earth"
 )
 
-# ---------------- DATA VIEW ----------------
-with st.expander("View Cleaned Data"):
+# ---------------- DATA ----------------
+with st.expander("📄 View Dataset"):
     st.dataframe(filtered, use_container_width=True)
